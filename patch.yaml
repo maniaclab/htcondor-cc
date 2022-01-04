@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workers-deployment
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: execute
+        resources:
+          limits:
+            cpu: "8"
+            memory: "100G"
+            ephemeral-storage: "10G"
+          requests:
+            cpu: "8"
+            memory: "100G"
+            ephemeral-storage: "10G"
+---
+apiVersion: v1
+data:
+  htcondor-pool-password: sa9dK3adkie/
+kind: Secret
+metadata:
+  name: htcondor-pool-password
+

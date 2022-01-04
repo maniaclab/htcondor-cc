@@ -1,0 +1,306 @@
+# condor submit service
+apiVersion: v1
+kind: Service
+metadata:
+  name: submit
+spec:
+  clusterIP: None 
+  selector:
+    htcondor-role: submit
+  ports:
+    - protocol: TCP
+      port: 9618
+      targetPort: 9618
+---
+# condor central manager service
+apiVersion: v1
+kind: Service
+metadata:
+  name: condor
+spec:
+  selector:
+    htcondor-role: cm
+  ports:
+    - protocol: TCP
+      port: 9618
+      targetPort: 9618
+---
+apiVersion: v1
+data:
+  01-role.conf: |
+    use ROLE : Execute
+    EXECUTE=/scratch
+kind: ConfigMap
+metadata:
+  name: 01-role
+
+---
+apiVersion: v1
+data:
+  htcondor-pool-password: sa9dK3adkie/
+kind: Secret
+metadata:
+  name: htcondor-pool-password
+type: Opaque
+
+---
+apiVersion: v1
+data:
+  01-security.conf: |+
+    # Require authentication and integrity checking by default.
+    use SECURITY : With_Authentication
+
+    # Host-based security is fine in a container environment, especially if
+    # we're also using a pool password or a token.
+    use SECURITY : Host_Based
+    # We also want root to be able to do reconfigs, restarts, etc.
+    ALLOW_ADMINISTRATOR = root@$(FULL_HOSTNAME) condor@$(FULL_HOSTNAME) $(ALLOW_ADMINISTRATOR)
+
+    # TOKEN-based auth is the preferred method starting with the HTCondor
+    # 8.9 series.
+    if version >= 8.9.7
+        SEC_DEFAULT_AUTHENTICATION_METHODS = FS, IDTOKENS
+    else
+        SEC_DEFAULT_AUTHENTICATION_METHODS = FS, TOKEN
+    endif
+
+    if $(USE_POOL_PASSWORD:no)
+        SEC_DEFAULT_AUTHENTICATION_METHODS = $(SEC_DEFAULT_AUTHENTICATION_METHODS), PASSWORD
+
+        ALLOW_ADVERTISE_STARTD = condor_pool@*/* $(ALLOW_ADVERTISE_STARTD)
+        ALLOW_ADVERTISE_SCHEDD = condor_pool@*/* $(ALLOW_ADVERTISE_SCHEDD)
+        ALLOW_ADVERTISE_MASTER = condor_pool@*/* $(ALLOW_ADVERTISE_MASTER)
+    endif
+
+    # Allow public reads; in this case, no need for authentication.
+    ALLOW_READ = *
+    ALLOW_WRITE = *
+    SEC_READ_AUTHENTICATION = OPTIONAL
+    ALLOW_NEGOTIATOR = *
+    USER_IS_THE_NEW_OWNER = true
+
+    ALLOW_ADVERTISE_MASTER = \
+        $(ALLOW_ADVERTISE_MASTER) \
+        $(ALLOW_WRITE_COLLECTOR) \
+        dockerworker@example.net
+
+    ALLOW_ADVERTISE_STARTD = \
+        $(ALLOW_ADVERTISE_STARTD) \
+        $(ALLOW_WRITE_COLLECTOR) \
+        dockerworker@example.net
+
+    ALLOW_ADVERTISE_SCHEDD = \
+        $(ALLOW_ADVERTISE_STARTD) \
+        $(ALLOW_WRITE_COLLECTOR) \
+        dockersubmit@example.net
+
+kind: ConfigMap
+metadata:
+  name: 01-security
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+ name: cm
+ labels:
+   htcondor-role: cm
+spec:
+ restartPolicy: Never
+ containers:
+  - name: cm
+    image: htcondor/cm:9.0.6-el7
+    imagePullPolicy: Always
+    resources:
+      limits:
+        cpu: "1"
+        memory: "10G"
+        ephemeral-storage: "10G"
+      requests:
+        cpu: "1"
+        memory: "10G"
+        ephemeral-storage: "10G"
+    volumeMounts:
+      - name: htcondor-pool-password
+        mountPath: /root/secrets
+        readOnly: true
+      - name: config-volume
+        mountPath: /etc/condor/config.d/01-security.conf
+        subPath: 01-security.conf
+    env:
+      - name: USE_POOL_PASSWORD
+        value: "yes"
+ volumes:
+  - name: htcondor-pool-password
+    secret:
+      secretName: htcondor-pool-password
+      items:
+      - key: htcondor-pool-password
+        path: pool_password
+  - name: config-volume
+    configMap:
+      name: 01-security
+      items:
+      - key: 01-security.conf
+        path: 01-security.conf 
+---
+apiVersion: v1
+kind: Pod
+metadata:
+ name: submit
+ labels:
+   htcondor-role: submit
+spec:
+ restartPolicy: Never
+ hostname: submit
+ subdomain: condorsub
+ containers:
+  - name: submit-container
+    image: htcondor/submit:9.0.6-el7
+    imagePullPolicy: Always
+    resources:
+      limits:
+        cpu: "1"
+        memory: "10G"
+        ephemeral-storage: "10G"
+      requests:
+        cpu: "1"
+        memory: "10G"
+        ephemeral-storage: "10G"
+    volumeMounts:
+      - name: htcondor-pool-password
+        mountPath: /root/secrets
+        readOnly: true
+      - name: config-volume
+        mountPath: /etc/condor/config.d/01-security.conf
+        subPath: 01-security.conf
+    env:
+      - name: USE_POOL_PASSWORD
+        value: "yes"
+ volumes:
+  - name: htcondor-pool-password
+    secret:
+      secretName: htcondor-pool-password
+      items:
+      - key: htcondor-pool-password
+        path: pool_password
+  - name: config-volume
+    configMap:
+      name: 01-security
+      items:
+      - key: 01-security.conf
+        path: 01-security.conf 
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workers-deployment
+  labels:
+    app: workers
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: workers
+  template:
+    metadata:
+      labels:
+        app: workers
+    spec:
+      hostNetwork: true
+      initContainers:
+      - name: init-myservice
+        image: busybox:latest
+        command:
+        - /bin/chown
+        - -R
+        - "64" 
+        - /scratch
+        volumeMounts:
+           - name: scratch
+             mountPath: /scratch
+      containers:
+       - name: execute
+         image: htcondor/execute:9.0.6-el7
+         imagePullPolicy: Always
+         lifecycle:
+           postStart:
+             exec:
+               command: ["/bin/sh", "-c", "ln -s /shared/docker.sock /var/run/docker.sock"]
+         resources:
+           limits:
+             cpu: "10"
+             memory: "100G"
+             ephemeral-storage: "10G" 
+           requests:
+             cpu: "10"
+             memory: "100G"
+             ephemeral-storage: "10G"
+         volumeMounts:
+           - name: htcondor-pool-password
+             mountPath: /root/secrets
+             readOnly: true
+           - name: docker-shared
+             mountPath: /shared
+           - name: scratch
+             mountPath: /scratch
+           - name: config-role
+             mountPath: /etc/condor/config.d/01-role.conf
+             subPath: 01-role.conf
+         env:
+           - name: DOCKER_HOST
+             value: unix:///shared/docker.sock
+           - name: _CONDOR_MEMORY
+             valueFrom:
+               resourceFieldRef:
+                 containerName: execute
+                 resource: requests.memory
+                 divisor: 1Mi
+           - name: _CONDOR_K8S_CPU
+             valueFrom:
+               resourceFieldRef:
+                 containerName: execute
+                 resource: requests.cpu
+                 divisor: 1m
+           - name: _CONDOR_NUM_CPUS
+             value: "IfThenElse(floor($(K8S_CPU)/1000) < 1, 1, floor($(K8S_CPU)/1000))"
+           - name: _CONDOR_NETWORK_HOSTNAME
+             valueFrom:
+               fieldRef:
+                 fieldPath: spec.nodeName
+       - name: dind-daemon
+         image: docker:dind
+         # 64 is the condor group
+         args: ["-G", "64"]
+         resources:
+           limits:
+             memory: "4G"
+         securityContext:
+           privileged: true
+         env:
+           - name: USE_POOL_PASSWORD
+             value: "yes"
+           - name: DOCKER_HOST
+             value: unix:///shared/docker.sock
+         volumeMounts:
+           - name: scratch
+             mountPath: /scratch
+           - name: docker-shared
+             mountPath: /shared
+      volumes:
+       - name: scratch
+         emptyDir: {}
+       - name: docker-shared
+         emptyDir: {}
+       - name: htcondor-pool-password
+         secret:
+           secretName: htcondor-pool-password
+           items:
+           - key: htcondor-pool-password
+             path: pool_password
+       - name: config-role
+         configMap:
+           name: 01-role
+           items:
+           - key: 01-role.conf
+             path: 01-role.conf

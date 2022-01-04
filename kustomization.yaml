@@ -1,0 +1,14 @@
+namespace: condor
+
+resources:
+- htcondorpool.yaml
+patchesStrategicMerge:
+- patch.yaml
+
+images:
+- name: htcondor/submit:9.0.6-el7 
+  newTag: 9.0.7-el7
+- name: htcondor/cm:9.0.6-el7 
+  newTag: 9.0.7-el7
+- name: htcondor/execute:9.0.6-el7 
+  newTag: 9.0.7-el7
