@@ -20,4 +20,9 @@ kubectl apply -k <kustomization directory>/
     CONDOR_HOST = condor.condor.svc.cluster.local
     SCHEDD_HOST = submit.condorsub.condor.svc.cluster.local
 ```
+upudate secret_creation_hook.py
+```sh
+    condor_user = 'submituser@submit.condorsub.condor.svc.cluster.local'
+    issuer = socket.gethostbyname('condor.condor.svc.cluster.local')
+```
 
