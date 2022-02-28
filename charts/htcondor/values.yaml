@@ -1,0 +1,51 @@
+# Default values for htcondor.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+
+image:
+  repository_execute: htcondor/execute
+  repository_cm: htcondor/cm
+  repository_submit: htcondor/submit
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "9.0.6-el7"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+
+#podAnnotations: {}
+
+
+submit:
+  service:
+    #type: ClusterIP
+    port: 9618
+cm:
+  service:
+    type: ClusterIP
+    port: 9618
+
+
+execute:
+  #number of condor workers
+  replicaCount: 2
+
+  nodeSelector: {}
+
+  tolerations: []
+
+  affinity: {}
+
+  resources:
+    limits:
+      cpu: "10"
+      ephemeral-storage: 10G
+      memory: 100G
+    requests:
+      cpu: "10"
+      ephemeral-storage: 10G
+      memory: 100G
+

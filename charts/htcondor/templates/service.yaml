@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "htcondor.fullname" . }}-submit
+  labels:
+    {{- include "htcondor.labels.submit" . | nindent 4 }}
+spec:
+  clusterIP: None
+  ports:
+    - port: {{ .Values.submit.service.port }}
+      targetPort: 9618
+      protocol: TCP
+      #name: http
+  selector:
+    {{- include "htcondor.selectorLabels.submit" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: condor
+  labels:
+    {{- include "htcondor.labels.cm" . | nindent 4 }}
+spec:
+  type: {{ .Values.cm.service.type }}
+  ports:
+    - port: {{ .Values.cm.service.port }}
+      targetPort: 9618
+      protocol: TCP
+      #name: http
+  selector:
+    {{- include "htcondor.selectorLabels.cm" . | nindent 4 }}

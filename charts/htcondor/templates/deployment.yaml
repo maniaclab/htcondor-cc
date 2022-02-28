@@ -1,0 +1,267 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "htcondor.fullname" . }}-worker
+  labels:
+    {{- include "htcondor.labels.execute" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.execute.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "htcondor.selectorLabels.execute" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "htcondor.selectorLabels.execute" . | nindent 8 }}
+    spec:
+      hostNetwork: true
+      initContainers:
+      - name: init-myservice
+        image: busybox:latest
+        command:
+        - /bin/chown
+        - -R
+        - "64" 
+        - /scratch
+        volumeMounts:
+           - name: scratch
+             mountPath: /scratch
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-worker
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository_execute }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh", "-c", "ln -s /shared/docker.sock /var/run/docker.sock"]
+          resources:
+            {{- toYaml .Values.execute.resources | nindent 12 }}
+          volumeMounts:
+            - name: htcondor-pool-password
+              mountPath: /root/secrets
+              readOnly: true
+            - name: docker-shared
+              mountPath: /shared
+            - name: scratch
+              mountPath: /scratch
+            - name: config-role
+              mountPath: /etc/condor/config.d/01-role.conf
+              subPath: 01-role.conf
+          env:
+            - name: DOCKER_HOST
+              value: unix:///shared/docker.sock
+            - name: _CONDOR_MEMORY
+              valueFrom:
+                resourceFieldRef:
+                  containerName: {{ .Chart.Name }}-worker
+                  resource: requests.memory
+                  divisor: 1Mi
+            - name: _CONDOR_K8S_CPU
+              valueFrom:
+                resourceFieldRef:
+                  containerName: {{ .Chart.Name }}-worker
+                  resource: requests.cpu
+                  divisor: 1m
+            - name: _CONDOR_NUM_CPUS
+              value: "IfThenElse(floor($(K8S_CPU)/1000) < 1, 1, floor($(K8S_CPU)/1000))"
+            - name: _CONDOR_NETWORK_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+        - name: dind-daemon
+          image: docker:dind
+          # 64 is the condor group
+          args: ["-G", "64"]
+          resources:
+            limits:
+              memory: "4G"
+          securityContext:
+            privileged: true
+          env:
+            - name: USE_POOL_PASSWORD
+              value: "yes"
+            - name: DOCKER_HOST
+              value: unix:///shared/docker.sock
+          volumeMounts:
+            - name: scratch
+              mountPath: /scratch
+            - name: docker-shared
+              mountPath: /shared
+      volumes:
+        - name: scratch
+          emptyDir: {}
+        - name: docker-shared
+          emptyDir: {}
+        - name: htcondor-pool-password
+          secret:
+            secretName: htcondor-pool-password
+            items:
+            - key: htcondor-pool-password
+              path: pool_password
+        - name: config-role
+          configMap:
+            name: 01-role
+            items:
+            - key: 01-role.conf
+              path: 01-role.conf
+      {{- with .Values.execute.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.execute.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.execute.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "htcondor.fullname" . }}-cm
+  labels:
+    {{- include "htcondor.labels.cm" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "htcondor.selectorLabels.cm" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        htcondor-role: cm
+        {{- include "htcondor.selectorLabels.cm" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-cm
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository_cm }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            limits:
+              cpu: "1"
+              memory: "10G"
+              ephemeral-storage: "10G"
+            requests:
+              cpu: "1"
+              memory: "10G"
+              ephemeral-storage: "10G"
+          volumeMounts:
+            - name: htcondor-pool-password
+              mountPath: /root/secrets
+              readOnly: true
+            - name: config-volume
+              mountPath: /etc/condor/config.d/01-security.conf
+              subPath: 01-security.conf
+          env:
+            - name: USE_POOL_PASSWORD
+              value: "yes"
+      volumes:
+        - name: htcondor-pool-password
+          secret:
+            secretName: htcondor-pool-password
+            items:
+            - key: htcondor-pool-password
+              path: pool_password
+        - name: config-volume
+          configMap:
+            name: 01-security
+            items:
+            - key: 01-security.conf
+              path: 01-security.conf
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "htcondor.fullname" . }}-submit
+  labels:
+    {{- include "htcondor.labels.submit" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "htcondor.selectorLabels.submit" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        htcondor-role: submit
+        {{- include "htcondor.selectorLabels.submit" . | nindent 8 }}
+    spec:
+      hostname: submit
+      subdomain: condorsub
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-cm
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository_submit }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            limits:
+              cpu: "1"
+              memory: "10G"
+              ephemeral-storage: "10G"
+            requests:
+              cpu: "1"
+              memory: "10G"
+              ephemeral-storage: "10G"
+          volumeMounts:
+            - name: htcondor-pool-password
+              mountPath: /root/secrets
+              readOnly: true
+            - name: config-volume
+              mountPath: /etc/condor/config.d/01-security.conf
+              subPath: 01-security.conf
+          env:
+            - name: USE_POOL_PASSWORD
+              value: "yes"
+      volumes:
+        - name: htcondor-pool-password
+          secret:
+            secretName: htcondor-pool-password
+            items:
+            - key: htcondor-pool-password
+              path: pool_password
+        - name: config-volume
+          configMap:
+            name: 01-security
+            items:
+            - key: 01-security.conf
+              path: 01-security.conf
+  

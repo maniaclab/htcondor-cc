@@ -1,0 +1,14 @@
+1. Configure coffea-casa with following setting:
+
+CONDOR_HOST = condor.{{ .Release.Namespace }}.svc.cluster.local
+SCHEDD_HOST = submit.condorsub.{{ .Release.Namespace }}.svc.cluster.local
+
+update secret_creation_hook.py with
+
+condor_user = 'submit.condorsub.{{ .Release.Namespace }}.svc.cluster.local'
+issuer = socket.gethostbyname('condor.{{ .Release.Namespace }}.svc.cluster.local')
+
+2. login to the submit pod to use the htcondor by running these command:
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "htcondor.name" . }}-submit,app.kubernetes.io/instance={{ .Release.Name }}-submit" -o jsonpath="{.items[0].metadata.name}")
+  kubectl --namespace {{ .Release.Namespace }} exec -it $POD_NAME -- /bin/bash
+
