@@ -18,6 +18,11 @@ fullnameOverride: ""
 
 #podAnnotations: {}
 
+# Pass in the secret Name and the key that stores the pool password
+# If ommited, a default secret named htcondor-pool-password will be 
+# created
+#poolPasswordSecretName: "htcondor-pool-password"
+#poolPasswordSecretKey: "htcondor-pool-password"
 
 submit:
   service:

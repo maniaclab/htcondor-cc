@@ -106,9 +106,9 @@ spec:
           emptyDir: {}
         - name: htcondor-pool-password
           secret:
-            secretName: htcondor-pool-password
+            secretName: {{ .Values.poolPasswordSecretName | default "htcondor-pool-password" | quote }}
             items:
-            - key: htcondor-pool-password
+            - key: {{ .Values.poolPasswordSecretKey | default "htcondor-pool-password" | quote }}
               path: pool_password
         - name: config-role
           configMap:
@@ -185,9 +185,9 @@ spec:
       volumes:
         - name: htcondor-pool-password
           secret:
-            secretName: htcondor-pool-password
+            secretName: {{ .Values.poolPasswordSecretName | default "htcondor-pool-password" | quote }}
             items:
-            - key: htcondor-pool-password
+            - key: {{ .Values.poolPasswordSecretKey | default "htcondor-pool-password" | quote }}
               path: pool_password
         - name: config-volume
           configMap:
@@ -254,9 +254,9 @@ spec:
       volumes:
         - name: htcondor-pool-password
           secret:
-            secretName: htcondor-pool-password
+            secretName: {{ .Values.poolPasswordSecretName | default "htcondor-pool-password" | quote }}
             items:
-            - key: htcondor-pool-password
+            - key: {{ .Values.poolPasswordSecretKey | default "htcondor-pool-password" | quote }}
               path: pool_password
         - name: config-volume
           configMap:

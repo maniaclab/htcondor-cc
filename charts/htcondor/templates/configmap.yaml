@@ -8,14 +8,16 @@ kind: ConfigMap
 metadata:
   name: 01-role
 
+{{ if .Values.poolPasswordSecretName }}
 ---
 apiVersion: v1
 data:
-  htcondor-pool-password: sa9dK3adkie/
+  htcondor-pool-password: s9rK3emUid7/
 kind: Secret
 metadata:
   name: htcondor-pool-password
 type: Opaque
+{{ end }}
 
 ---
 apiVersion: v1
