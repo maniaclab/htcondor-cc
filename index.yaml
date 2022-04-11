@@ -3,6 +3,16 @@ entries:
   htcondor:
   - apiVersion: v2
     appVersion: 1.0.0
+    created: "2022-04-11T15:06:50.473471729Z"
+    description: A Helm chart for Kubernetes
+    digest: a4e2bdc609806fcab1797c3af0598bd41032c138a44135a17bc1815adf2660a7
+    name: htcondor
+    type: application
+    urls:
+    - https://github.com/maniaclab/htcondor-cc/releases/download/htcondor-0.1.4/htcondor-0.1.4.tgz
+    version: 0.1.4
+  - apiVersion: v2
+    appVersion: 1.0.0
     created: "2022-03-09T15:37:05.902071178Z"
     description: A Helm chart for Kubernetes
     digest: 30f6b3ab15ced581ede247f4959808c681cbbbb5b0447b00b359f9f4770528b3
