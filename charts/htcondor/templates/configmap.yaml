@@ -8,7 +8,7 @@ kind: ConfigMap
 metadata:
   name: 01-role
 
-{{ if .Values.poolPasswordSecretName }}
+{{ if not .Values.poolPasswordSecretName }}
 ---
 apiVersion: v1
 data:

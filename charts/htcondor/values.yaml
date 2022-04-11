@@ -54,3 +54,11 @@ execute:
       ephemeral-storage: 10G
       memory: 100G
 
+  extraVolumes: []
+  #- name: skyhook-shared
+  #  persistentVolumeClaim:
+  #    claimName: skyhook-pv-claim
+  extraVolumeMounts: []
+  #- mountPath: /mnt/cephfs
+  #  name: skyhook-shared
+
